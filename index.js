@@ -124,6 +124,8 @@ var identifier = (0, parsing_1.regex)(/[a-zA-Z][a-zA-Z0-9]*|[\+\-\*\/!@$%&^~:<>=
 });
 var int = (0, parsing_1.regex)(/\d+/)
     .map(function (i) { return "__INT(".concat(i, ")"); });
+var float = (0, parsing_1.regex)(/\d+\.\d+/)
+    .map(function (f) { return "__FLOAT(".concat(f, ")"); });
 var str = (0, parsing_1.regex)(/"[^"]*"/)
     .map(function (s) { return "__STRING(".concat(s, ")"); });
 var sString = (0, parsing_1.regex)(/`[^`]*`/)
@@ -136,7 +138,18 @@ var parameterList = (0, parsing_1.seq)((0, parsing_1.string)("("), identifier, (
     var f = _a[1], r = _a[2];
     return "(".concat([f].concat(r).join(", "), ")");
 });
-var expression = (0, parsing_1.lazy)(function () { return (0, parsing_1.alt)(doNotation, block, lambdaExpression, prefixOp, matchExpression, sString, freeMethodAccess, methodCall, propertyAccess, identifier, int, str); });
+var expression = (0, parsing_1.lazy)(function () { return (0, parsing_1.alt)(doNotation, block, lambdaExpression, prefixOp, matchExpression, sString, freeMethodAccess, methodCall, propertyAccess, array, identifier, float, int, str); });
+var array = (0, parsing_1.seq)((0, parsing_1.string)("["), expression, (0, parsing_1.seq)((0, parsing_1.string)(","), expression).map(function (_a) {
+    var e = _a[1];
+    return e;
+}).many(), (0, parsing_1.string)(",").optOr(""), (0, parsing_1.string)("]")).map(function (_a) {
+    var head = _a[1], tail = _a[2];
+    var arr = [head].concat(tail);
+    arr = arr.reverse();
+    var code = "Nil";
+    arr.forEach(function (e) { return code = "Cons(".concat(e, ", ").concat(code, ")"); });
+    return code;
+});
 var argumentList = (0, parsing_1.seq)((0, parsing_1.string)("("), (0, parsing_1.alt)(expression, (0, parsing_1.string)("_")), (0, parsing_1.seq)((0, parsing_1.string)(","), (0, parsing_1.alt)(expression, (0, parsing_1.string)("_"))).map(function (_a) {
     var e = _a[1];
     return e;
@@ -144,7 +157,7 @@ var argumentList = (0, parsing_1.seq)((0, parsing_1.string)("("), (0, parsing_1.
     var f = _a[1], r = _a[2];
     return "(".concat([f].concat(r).join(",₩"), ")");
 });
-var primaryExpression = (0, parsing_1.lazy)(function () { return (0, parsing_1.alt)(sString, prefixOp, methodCall, identifier, int, str, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
+var primaryExpression = (0, parsing_1.lazy)(function () { return (0, parsing_1.alt)(sString, prefixOp, methodCall, array, identifier, float, int, str, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
     var expr = _a[1];
     return expr;
 })); });
@@ -171,7 +184,7 @@ var block = (0, parsing_1.seq)((0, parsing_1.string)("block"), statement.many(),
     var stmts = _a[1], expr = _a[2];
     return "__LAZY(function()\n".concat(stmts.map(function (s) { return "".concat(s, "\n"); }).join(""), "return ").concat(expr, "\nend)");
 });
-var propertyAccess = (0, parsing_1.seq)((0, parsing_1.alt)(identifier, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
+var propertyAccess = (0, parsing_1.seq)((0, parsing_1.alt)(array, identifier, float, int, str, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
     var e = _a[1];
     return e;
 })), (0, parsing_1.string)("."), identifier).map(function (_a) {
@@ -221,7 +234,7 @@ var freeMethodAccess = (0, parsing_1.seq)((0, parsing_1.alt)(primaryExpression, 
         var var2 = "_ANON_".concat(idCount++);
         return "__LAZY(function()\nreturn function(".concat(var2, ")\nreturn __EAGER(").concat(expr, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)");
     }
-    return "__EAGER(".concat(expr, "[\"").concat(name, "\"])(").concat(arg, ")");
+    return "__EAGER(__EAGER(".concat(expr, ")[\"").concat(name, "\"])(").concat(arg, ")");
 });
 var lambdaExpression = (0, parsing_1.seq)(parameterList, (0, parsing_1.string)("=>"), (0, parsing_1.alt)(block, expression)).map(function (_a) {
     var ps = _a[0], bl = _a[2];

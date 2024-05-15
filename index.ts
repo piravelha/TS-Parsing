@@ -139,6 +139,10 @@ const int: Parser<string> =
   regex(/\d+/)
   .map(i => `__INT(${i})`)
 
+const float: Parser<string> =
+  regex(/\d+\.\d+/)
+  .map(f => `__FLOAT(${f})`)
+
 const str: Parser<string> =
   regex(/"[^"]*"/)
   .map(s => `__STRING(${s})`)
@@ -169,10 +173,29 @@ const expression: Parser<string> =
     freeMethodAccess,
     methodCall,
     propertyAccess,
+    array,
     identifier,
+    float,
     int,
     str,
   ))
+
+const array: Parser<string> = seq(
+  string("["),
+  expression,
+  seq(
+    string(","),
+    expression,
+  ).map(([,e]) => e).many(),
+  string(",").optOr(""),
+  string("]"),
+).map(([,head,tail,,]) => {
+  let arr = [head].concat(tail)
+  arr = arr.reverse()
+  let code = "Nil"
+  arr.forEach(e => code = `Cons(${e}, ${code})`)
+  return code
+})
 
 const argumentList: Parser<string> = seq(
   string("("),
@@ -195,7 +218,9 @@ const primaryExpression: Parser<string> =
     sString,
     prefixOp,
     methodCall,
+    array,
     identifier,
+    float,
     int,
     str,
     seq(
@@ -241,7 +266,11 @@ const block: Parser<string> = seq(
 
 const propertyAccess: Parser<string> = seq(
   alt(
+    array,
     identifier,
+    float,
+    int,
+    str,
     seq(
       string("("),
       expression,
@@ -315,7 +344,7 @@ const freeMethodAccess: Parser<string> = seq(
     const var2 = `_ANON_${idCount++}`
     return `__LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${expr}["${name}"])(${var2})\nend\nend)`
   }
-  return `__EAGER(${expr}["${name}"])(${arg})`
+  return `__EAGER(__EAGER(${expr})["${name}"])(${arg})`
 })
 
 const lambdaExpression: Parser<string> = seq(
