@@ -74,6 +74,21 @@ function convertScalaToLua(scalaString) {
     luaString += identifiers.join(', ') + ')';
     return luaString;
 }
+function freeMethodAccessMapping(expr, name, arg) {
+    if (expr === "_") {
+        var var1 = "_ANON_".concat(idCount++);
+        if (arg === "_") {
+            var var2 = "_ANON_".concat(idCount++);
+            return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __LAZY(function()\nreturn function(").concat(var2, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)\nend\nend)");
+        }
+        return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(arg, ")\nend\nend)");
+    }
+    if (arg === "_") {
+        var var2 = "_ANON_".concat(idCount++);
+        return "__LAZY(function()\nreturn function(".concat(var2, ")\nreturn __EAGER(").concat(expr, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)");
+    }
+    return "__EAGER(__EAGER(".concat(expr, ")[\"").concat(name, "\"])(").concat(arg, ")");
+}
 var operatorLookup = {
     "+": "_PLUS_",
     "-": "_DASH_",
@@ -99,7 +114,7 @@ var luaKeywords = {
     "and": "_AND",
     "or": "_OR",
 };
-var keywords = ["bind", "to", "def", "end", "match", "case", "block", "_OP___LT__PIPE_", "_OP___AT_", "do"];
+var keywords = ["yield", "_OP___EQ_", "def", "end", "match", "case", "block", "_OP___LT__PIPE_", "_OP___AT_", "do"];
 var idCount = 0;
 var identifier = (0, parsing_1.regex)(/[a-zA-Z][a-zA-Z0-9]*|[\+\-\*\/!@$%&^~:<>=|?]+/)
     .flatMap(function (id) {
@@ -175,7 +190,7 @@ var prefixOp = (0, parsing_1.seq)((0, parsing_1.alt)(identifier.flatMap(function
     return i;
 })), primaryExpression).map(function (_a) {
     var op = _a[0], e = _a[1];
-    return "__EAGER(".concat(e, "[\"").concat(op, "\"])");
+    return "__EAGER(__EAGER(".concat(e, ")[\"").concat(op, "\"])");
 });
 var block = (0, parsing_1.seq)((0, parsing_1.string)("block"), statement.many(), (0, parsing_1.seq)((0, parsing_1.string)("<|"), expression).map(function (_a) {
     var e = _a[1];
@@ -184,14 +199,26 @@ var block = (0, parsing_1.seq)((0, parsing_1.string)("block"), statement.many(),
     var stmts = _a[1], expr = _a[2];
     return "__LAZY(function()\n".concat(stmts.map(function (s) { return "".concat(s, "\n"); }).join(""), "return ").concat(expr, "\nend)");
 });
-var propertyAccess = (0, parsing_1.seq)((0, parsing_1.alt)(array, identifier, float, int, str, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
+var propertyAccessHelper = (0, parsing_1.seq)((0, parsing_1.alt)(array, (0, parsing_1.string)("_"), identifier, float, int, str, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
     var e = _a[1];
     return e;
 })), (0, parsing_1.string)("."), identifier).map(function (_a) {
     var expr = _a[0], name = _a[2];
+    return [expr, name];
+});
+var rawPropertyAccess = propertyAccessHelper.map(function (_a) {
+    var expr = _a[0], name = _a[1];
+    return "".concat(expr, "[\"").concat(name, "\"]");
+});
+var propertyAccess = propertyAccessHelper.map(function (_a) {
+    var expr = _a[0], name = _a[1];
+    if (expr === "_") {
+        var var1 = "_ANON_".concat(idCount++);
+        return "(function(".concat(var1, ")\nreturn __EAGER(__EAGER(").concat(var1, ")[\"").concat(name, "\"])\nend)");
+    }
     return "__EAGER(__EAGER(".concat(expr, ")[\"").concat(name, "\"])");
 });
-var methodCall = (0, parsing_1.seq)((0, parsing_1.alt)((0, parsing_1.string)("_"), propertyAccess, identifier, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
+var methodCall = (0, parsing_1.seq)((0, parsing_1.alt)(rawPropertyAccess, (0, parsing_1.string)("_"), identifier, (0, parsing_1.seq)((0, parsing_1.string)("("), expression, (0, parsing_1.string)(")")).map(function (_a) {
     var e = _a[1];
     return e;
 })), argumentList.some()).map(function (_a) {
@@ -208,9 +235,9 @@ var methodCall = (0, parsing_1.seq)((0, parsing_1.alt)((0, parsing_1.string)("_"
         code += argsStr.join(", ") + ")";
         for (var i in [func].concat(newArgs)) {
             var arg = [func].concat(newArgs)[i];
-            if (arg === "_") {
+            if (arg.startsWith("_[") || arg === "_") {
                 var argVar = "_ANON_".concat(idCount++);
-                code = "function(".concat(argVar, ")\nreturn ").concat(code.replace("%ARG_".concat(i), "__EAGER(".concat(argVar, ")")), "\nend");
+                code = "function(".concat(argVar, ")\nreturn ").concat(code.replace("%ARG_".concat(i), "__EAGER(".concat(argVar).concat(arg.replace("_", ""))), ")\nend");
             }
             else {
                 code = code.replace("%ARG_".concat(i), "__EAGER(".concat(arg, ")"));
@@ -220,21 +247,18 @@ var methodCall = (0, parsing_1.seq)((0, parsing_1.alt)((0, parsing_1.string)("_"
     }
     return code;
 });
-var freeMethodAccess = (0, parsing_1.seq)((0, parsing_1.alt)(primaryExpression, (0, parsing_1.string)("_")), identifier, (0, parsing_1.alt)(methodCall, primaryExpression, (0, parsing_1.string)("_"))).map(function (_a) {
+var binaryFreeMethodAccess = (0, parsing_1.seq)((0, parsing_1.alt)(primaryExpression, (0, parsing_1.string)("_")), identifier, (0, parsing_1.alt)(methodCall, primaryExpression, (0, parsing_1.string)("_"))).map(function (_a) {
     var expr = _a[0], name = _a[1], arg = _a[2];
-    if (expr === "_") {
-        var var1 = "_ANON_".concat(idCount++);
-        if (arg === "_") {
-            var var2 = "_ANON_".concat(idCount++);
-            return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __LAZY(function()\nreturn function(").concat(var2, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)\nend\nend)");
-        }
-        return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(arg, ")\nend\nend)");
+    return freeMethodAccessMapping(expr, name, arg);
+});
+var freeMethodAccess = (0, parsing_1.seq)((0, parsing_1.alt)(primaryExpression, (0, parsing_1.string)("_")), (0, parsing_1.seq)(identifier, (0, parsing_1.alt)(methodCall, primaryExpression, (0, parsing_1.string)("_"))).some()).map(function (_a) {
+    var expr = _a[0], argLists = _a[1];
+    var code = expr;
+    for (var _i = 0, argLists_2 = argLists; _i < argLists_2.length; _i++) {
+        var _b = argLists_2[_i], name_1 = _b[0], arg = _b[1];
+        code = freeMethodAccessMapping(code, name_1, arg);
     }
-    if (arg === "_") {
-        var var2 = "_ANON_".concat(idCount++);
-        return "__LAZY(function()\nreturn function(".concat(var2, ")\nreturn __EAGER(").concat(expr, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)");
-    }
-    return "__EAGER(__EAGER(".concat(expr, ")[\"").concat(name, "\"])(").concat(arg, ")");
+    return code;
 });
 var lambdaExpression = (0, parsing_1.seq)(parameterList, (0, parsing_1.string)("=>"), (0, parsing_1.alt)(block, expression)).map(function (_a) {
     var ps = _a[0], bl = _a[2];
@@ -274,7 +298,7 @@ var matchExpression = (0, parsing_1.seq)((0, parsing_1.string)("match"), express
         return "if getmetatable(_SCRUTINEE).__type() == ".concat(name, " then\nreturn (function(").concat(args.join(", "), ")\nreturn ").concat(expr, "\nend)(table.unpack(getmetatable(_SCRUTINEE).__args))\nend");
     }).join("\n"), "\nend)(").concat(scrutinee, ")");
 });
-var doNotation = (0, parsing_1.seq)((0, parsing_1.string)("do"), (0, parsing_1.alt)((0, parsing_1.seq)((0, parsing_1.string)("bind"), (0, parsing_1.alt)(identifier, (0, parsing_1.string)("_")), (0, parsing_1.string)("to"), expression).map(function (_a) {
+var doNotation = (0, parsing_1.seq)((0, parsing_1.string)("do"), (0, parsing_1.alt)((0, parsing_1.seq)((0, parsing_1.string)("yield"), (0, parsing_1.alt)(identifier, (0, parsing_1.string)("_")), (0, parsing_1.string)("="), expression).map(function (_a) {
     var b = _a[1], e = _a[3];
     return [b, e];
 }), (0, parsing_1.seq)((0, parsing_1.string)("<|"), expression).map(function (_a) {
@@ -285,8 +309,8 @@ var doNotation = (0, parsing_1.seq)((0, parsing_1.string)("do"), (0, parsing_1.a
     var code = "";
     var last = bindings.pop();
     for (var _i = 0, _b = bindings; _i < _b.length; _i++) {
-        var _c = _b[_i], name_1 = _c[0], expr = _c[1];
-        code += "__EAGER(__EAGER(".concat(expr, "[\"_OP___GT__GT__EQ_\"])(function(").concat(name_1, ")\nreturn ");
+        var _c = _b[_i], name_2 = _c[0], expr = _c[1];
+        code += "__EAGER(__EAGER(".concat(expr, "[\"_OP___GT__GT__EQ_\"])(function(").concat(name_2, ")\nreturn ");
     }
     code += "".concat(last[1]).concat("\nend))".repeat(bindings.length));
     return code;

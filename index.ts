@@ -83,6 +83,22 @@ function convertScalaToLua(scalaString) {
   return luaString
 }
 
+function freeMethodAccessMapping(expr, name, arg) {
+   if (expr === "_") {
+    const var1 = `_ANON_${idCount++}`
+    if (arg === "_") {
+      const var2 = `_ANON_${idCount++}`
+      return `__LAZY(function()\nreturn function(${var1})\nreturn __LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${var1}["${name}"])(${var2})\nend\nend)\nend\nend)`
+    }
+    return `__LAZY(function()\nreturn function(${var1})\nreturn __EAGER(${var1}["${name}"])(${arg})\nend\nend)` 
+  }
+  if (arg === "_") {
+    const var2 = `_ANON_${idCount++}`
+    return `__LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${expr}["${name}"])(${var2})\nend\nend)`
+  }
+  return `__EAGER(__EAGER(${expr})["${name}"])(${arg})`
+}
+
 const operatorLookup: Record<string, string> = {
   "+": "_PLUS_",
   "-": "_DASH_",
@@ -110,7 +126,7 @@ const luaKeywords: Record<string, string> = {
   "or": "_OR",
 }
 
-const keywords = ["bind", "to", "def", "end", "match", "case", "block", "_OP___LT__PIPE_", "_OP___AT_", "do"]
+const keywords = ["yield", "_OP___EQ_", "def", "end", "match", "case", "block", "_OP___LT__PIPE_", "_OP___AT_", "do"]
 
 let idCount = 0
 
@@ -251,7 +267,7 @@ const prefixOp: Parser<string> = seq(
     ).map(([,i]) => i)
   ),
   primaryExpression,
-).map(([op,e]) => `__EAGER(${e}["${op}"])`)
+).map(([op,e]) => `__EAGER(__EAGER(${e})["${op}"])`)
 
 const block: Parser<string> = seq(
   string("block"),
@@ -264,9 +280,10 @@ const block: Parser<string> = seq(
 ).map(([,stmts,expr,]) =>
   `__LAZY(function()\n${stmts.map(s => `${s}\n`).join("")}return ${expr}\nend)`)
 
-const propertyAccess: Parser<string> = seq(
+const propertyAccessHelper = seq(
   alt(
     array,
+    string("_"),
     identifier,
     float,
     int,
@@ -279,13 +296,24 @@ const propertyAccess: Parser<string> = seq(
   ),
   string("."),
   identifier,
-).map(([expr,,name]) =>
-  `__EAGER(__EAGER(${expr})["${name}"])`)
+).map(([expr,,name]) => [expr, name])
+  
+const rawPropertyAccess: Parser<string> = propertyAccessHelper.map(([expr,name]) => {
+  return `${expr}["${name}"]`
+})
+
+const propertyAccess = propertyAccessHelper.map(([expr,name]) => {
+  if (expr === "_") {
+    let var1 = `_ANON_${idCount++}`
+    return `(function(${var1})\nreturn __EAGER(__EAGER(${var1})["${name}"])\nend)`
+  }
+  return `__EAGER(__EAGER(${expr})["${name}"])`
+})
 
 const methodCall: Parser<string> = seq(
   alt(
+    rawPropertyAccess,
     string("_"),
-    propertyAccess,
     identifier,
     seq(
       string("("),
@@ -307,9 +335,9 @@ const methodCall: Parser<string> = seq(
 
     for (let i in [func].concat(newArgs)) {
       let arg = [func].concat(newArgs)[i]
-      if (arg === "_") {
+      if (arg.startsWith("_[") || arg === "_") {
         let argVar = `_ANON_${idCount++}`
-        code = `function(${argVar})\nreturn ${code.replace(`%ARG_${i}`, `__EAGER(${argVar})`)}\nend`
+        code = `function(${argVar})\nreturn ${code.replace(`%ARG_${i}`, `__EAGER(${argVar}${arg.replace("_", "")}`)})\nend`
       } else {
         code = code.replace(`%ARG_${i}`, `__EAGER(${arg})`)
       }
@@ -320,7 +348,7 @@ const methodCall: Parser<string> = seq(
   return code
 })
 
-const freeMethodAccess: Parser<string> = seq(
+const binaryFreeMethodAccess: Parser<string> = seq(
   alt(
     primaryExpression,
     string("_"),
@@ -331,20 +359,29 @@ const freeMethodAccess: Parser<string> = seq(
     primaryExpression,
     string("_"),
   )
-).map(([expr,name,arg]) => {
-  if (expr === "_") {
-    const var1 = `_ANON_${idCount++}`
-    if (arg === "_") {
-      const var2 = `_ANON_${idCount++}`
-      return `__LAZY(function()\nreturn function(${var1})\nreturn __LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${var1}["${name}"])(${var2})\nend\nend)\nend\nend)`
-    }
-    return `__LAZY(function()\nreturn function(${var1})\nreturn __EAGER(${var1}["${name}"])(${arg})\nend\nend)` 
+).map(([expr,name,arg]) => 
+  freeMethodAccessMapping(expr, name, arg)
+ )
+
+const freeMethodAccess: Parser<string> = seq(
+  alt(
+    primaryExpression,
+    string("_"),
+  ),
+  seq(
+    identifier,
+    alt(
+      methodCall,
+      primaryExpression,
+      string("_"),
+    ),
+  ).some(),
+).map(([expr,argLists]) => {
+  let code = expr
+  for (const [name, arg] of argLists) {
+    code = freeMethodAccessMapping(code, name, arg)
   }
-  if (arg === "_") {
-    const var2 = `_ANON_${idCount++}`
-    return `__LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${expr}["${name}"])(${var2})\nend\nend)`
-  }
-  return `__EAGER(__EAGER(${expr})["${name}"])(${arg})`
+  return code
 })
 
 const lambdaExpression: Parser<string> = seq(
@@ -420,12 +457,12 @@ const doNotation: Parser<string> = seq(
   string("do"),
   alt(
     seq(
-      string("bind"),
+      string("yield"),
       alt(
         identifier,
         string("_"),
       ),
-      string("to"),
+      string("="),
       expression,
     ).map(([,b,,e]) => [b, e] as const),
     seq(

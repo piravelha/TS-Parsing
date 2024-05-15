@@ -205,10 +205,25 @@ local function Cons(head, tail)
     return tail.filter(p)
   end
 
+  local function _BANG__BANG_(i)
+    if i["~"] == 0 then
+      return head
+    else
+      return tail._OP___BANG__BANG_(__INT(i["~"] - 1))
+    end
+  end
+
   return setmetatable({
+    head = __LAZY(function()
+      return head
+    end),
+    tail = __LAZY(function()
+      return tail
+    end),
     map = map,
     _OP___LT__DOL__GT_ = map,
     filter = filter,
+    _OP___BANG__BANG_ = _BANG__BANG_,
     ["~1"] = head,
     ["~2"] = tail,
   }, {
@@ -240,6 +255,68 @@ Nil = setmetatable({
   __args = {},
 })
 
+local None
+
+local function Some(value)
+  function map(f)
+    return Some(f(value))
+  end
+  function filter(p)
+    if p(value) == True then
+      return Some(value)
+    else
+      return None
+    end
+  end
+  function _GT__GT_(m)
+    return m
+  end
+  function _GT__GT__EQ_(f)
+    return f(value)
+  end
+  function _LT__PIPE__GT_(m)
+    return Some(value)
+  end
+  return setmetatable({
+    map = map,
+    _OP___LT__DOL__GT_ = map,
+    filter = filter,
+    _OP___GT__GT_ = _GT__GT_,
+    _OP___GT__GT__EQ_ = _GT__GT__EQ_,
+    ["~"] = value,
+  }, {
+    __tostring = function()
+      return "Some(" .. tostring(value) .. ")"
+    end,
+    __type = function() return Some end,
+    __args = {value}
+  })
+end
+
+None = setmetatable({
+  map = function(f)
+    return None
+  end,
+  _OP___LT__DOL__GT_ = function(f)
+    return None
+  end,
+  filter = function(p)
+    return None
+  end,
+  _OP___GT__GT_ = function(m)
+    return None
+  end,
+  _OP___GT__GT__EQ_ = function(f)
+    return None
+  end,
+}, {
+  __tostring = function()
+    return "None"
+  end,
+  __type = function() return None end,
+  __args = {},
+})
+
 local function IO(action)
   return setmetatable({
     _OP___GT__GT_ = function(other)
@@ -267,7 +344,18 @@ local function println(...)
    end)
 end
 
-local Math = {
+local List = {
+  range = function(min, max, step)
+    step = step or __INT(1)
+    local l = Nil
+    for i = max["~"], min["~"], -step["~"] do
+      l = Cons(__INT(i), l)
+    end
+    return l
+  end
+}
+
+local Random = {
   random = function(min, max)
     return IO(function()
       math.randomseed(os.time())

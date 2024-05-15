@@ -205,10 +205,25 @@ local function Cons(head, tail)
     return tail.filter(p)
   end
 
+  local function _BANG__BANG_(i)
+    if i["~"] == 0 then
+      return head
+    else
+      return tail._OP___BANG__BANG_(__INT(i["~"] - 1))
+    end
+  end
+
   return setmetatable({
+    head = __LAZY(function()
+      return head
+    end),
+    tail = __LAZY(function()
+      return tail
+    end),
     map = map,
     _OP___LT__DOL__GT_ = map,
     filter = filter,
+    _OP___BANG__BANG_ = _BANG__BANG_,
     ["~1"] = head,
     ["~2"] = tail,
   }, {
@@ -240,6 +255,68 @@ Nil = setmetatable({
   __args = {},
 })
 
+local None
+
+local function Some(value)
+  function map(f)
+    return Some(f(value))
+  end
+  function filter(p)
+    if p(value) == True then
+      return Some(value)
+    else
+      return None
+    end
+  end
+  function _GT__GT_(m)
+    return m
+  end
+  function _GT__GT__EQ_(f)
+    return f(value)
+  end
+  function _LT__PIPE__GT_(m)
+    return Some(value)
+  end
+  return setmetatable({
+    map = map,
+    _OP___LT__DOL__GT_ = map,
+    filter = filter,
+    _OP___GT__GT_ = _GT__GT_,
+    _OP___GT__GT__EQ_ = _GT__GT__EQ_,
+    ["~"] = value,
+  }, {
+    __tostring = function()
+      return "Some(" .. tostring(value) .. ")"
+    end,
+    __type = function() return Some end,
+    __args = {value}
+  })
+end
+
+None = setmetatable({
+  map = function(f)
+    return None
+  end,
+  _OP___LT__DOL__GT_ = function(f)
+    return None
+  end,
+  filter = function(p)
+    return None
+  end,
+  _OP___GT__GT_ = function(m)
+    return None
+  end,
+  _OP___GT__GT__EQ_ = function(f)
+    return None
+  end,
+}, {
+  __tostring = function()
+    return "None"
+  end,
+  __type = function() return None end,
+  __args = {},
+})
+
 local function IO(action)
   return setmetatable({
     _OP___GT__GT_ = function(other)
@@ -267,7 +344,18 @@ local function println(...)
    end)
 end
 
-local Math = {
+local List = {
+  range = function(min, max, step)
+    step = step or __INT(1)
+    local l = Nil
+    for i = max["~"], min["~"], -step["~"] do
+      l = Cons(__INT(i), l)
+    end
+    return l
+  end
+}
+
+local Random = {
   random = function(min, max)
     return IO(function()
       math.randomseed(os.time())
@@ -280,46 +368,8 @@ function __EVAL(io)
   return getmetatable(__EAGER(io)).__eval()
 end
 
-local list
-list = __LAZY(function()
-  return Cons(__INT(1), Cons(__INT(2), Cons(__INT(3), Cons(__INT(4), Cons(__INT(5), Cons(__INT(6), Cons(__INT(7), Cons(__INT(8), Cons(__INT(9), Cons(__INT(10), Nil))))))))))
-end)
-local a
-a = __LAZY(function()
-  return __EAGER(__EAGER(__EAGER(__EAGER(list)["map"]))(__EAGER(__LAZY(function()
-    return function(_ANON_1)
-      return __EAGER(_ANON_1["_OP___PLUS_"])(__INT(5))
-    end
-  end))))
-end)
-local b
-b = __LAZY(function()
-  return __EAGER(__EAGER(__EAGER(__EAGER(list)["_OP___LT__DOL__GT_"]))(__EAGER(__LAZY(function()
-    return function(_ANON_3)
-      return __EAGER(_ANON_3["_OP___PLUS_"])(__INT(5))
-    end
-  end))))
-end)
-local c
-c = __LAZY(function()
-  return __EAGER(__EAGER(list)["map"])(__LAZY(function()
-    return function(_ANON_8)
-      return __EAGER(_ANON_8["_OP___PLUS_"])(__INT(5))
-    end
-  end))
-end)
-local d
-d = __LAZY(function()
-  return __EAGER(__EAGER(list)["_OP___LT__DOL__GT_"])(__LAZY(function()
-    return function(_ANON_13)
-      return __EAGER(_ANON_13["_OP___PLUS_"])(__INT(5))
-    end
-  end))
-end)
-__EVAL(__EAGER(__EAGER(__EAGER(__EAGER(println)(__EAGER(a)))["_OP___GT__GT__EQ_"])(function(_)
-  return __EAGER(__EAGER(__EAGER(__EAGER(println)(__EAGER(b)))["_OP___GT__GT__EQ_"])(function(_)
-    return __EAGER(__EAGER(__EAGER(__EAGER(println)(__EAGER(c)))["_OP___GT__GT__EQ_"])(function(_)
-      return __EAGER(__EAGER(println)(__EAGER(d)))
-    end))
+__EVAL(__EAGER(__EAGER(__EAGER(__EAGER(Random["random"])(__EAGER(__INT(0)), __EAGER(__INT(100))))["_OP___GT__GT__EQ_"])(function(n)
+  return __EAGER(__EAGER(__EAGER(__EAGER(Random["random"])(__EAGER(__INT(0)), __EAGER(__INT(100))))["_OP___GT__GT__EQ_"])(function(m)
+    return __EAGER(__EAGER(println)(__EAGER(__EAGER(__EAGER(n)["_OP___PLUS_"])(m))))
   end))
 end)))

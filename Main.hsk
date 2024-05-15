@@ -1,16 +1,6 @@
 
-def list =
-  [1,2,3,4,5,6,7,8,9,10]
-
-def a = list.map(_ + 5)
-def b = list.<$>(_ + 5)
-def c = list map (_ + 5)
-def d = list <$> (_ + 5)
-
 <| do
-  <| println(a)
-  <| println(b)
-  <| println(c)
-  <| println(d)
+  yield n = Random.random(0, 100)
+  yield m = Random.random(0, 100)
+  <| println(n + m)
 end
-
