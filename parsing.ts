@@ -72,6 +72,7 @@ export class Parser<const Xs> {
 }
 
 export const alt = <Xs>(...ps: Parser<Xs>[]) => new Parser(input => {
+  if (!input) return null
   for (const p of ps) {
     const result = p.raw_parse(input)
     if (!result) continue
@@ -109,7 +110,7 @@ export const empty: Parser<never> = new Parser(input => null)
 export const regex = (re: RegExp) => new Parser(input => {
   let source = re.source
   if (!source.startsWith("^")) {
-    source = "^" + source
+    source = "^(?:" + source + ")"
   }
   re = RegExp(source)
   const result = re.exec(input)

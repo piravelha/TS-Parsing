@@ -90,6 +90,8 @@ var alt = function () {
         ps[_i] = arguments[_i];
     }
     return new Parser(function (input) {
+        if (!input)
+            return null;
         for (var _i = 0, ps_1 = ps; _i < ps_1.length; _i++) {
             var p = ps_1[_i];
             var result = p.raw_parse(input);
@@ -130,7 +132,7 @@ exports.empty = new Parser(function (input) { return null; });
 var regex = function (re) { return new Parser(function (input) {
     var source = re.source;
     if (!source.startsWith("^")) {
-        source = "^" + source;
+        source = "^(?:" + source + ")";
     }
     re = RegExp(source);
     var result = re.exec(input);

@@ -1,0 +1,9 @@
+
+def main = do
+  bind n to Math.random(0, 100)
+  bind m to Math.random(0, 100)
+  <| println(n + m)
+end
+
+<| main
+
