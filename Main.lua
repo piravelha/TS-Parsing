@@ -1,3 +1,5 @@
+local __RANDOM_SEED = 696969696
+
 local function __LAZY(obj)
   if type(obj) == "table" and obj["~lazy"] then
     return obj
@@ -358,7 +360,8 @@ local List = {
 local Random = {
   random = function(min, max)
     return IO(function()
-      math.randomseed(os.time())
+      __RANDOM_SEED = __RANDOM_SEED + 1 + os.time()
+      math.randomseed(__RANDOM_SEED)
       return __INT(math.random(min["~"], max["~"]))
     end)
   end,
@@ -368,8 +371,16 @@ function __EVAL(io)
   return getmetatable(__EAGER(io)).__eval()
 end
 
-__EVAL(__EAGER(__EAGER(__EAGER(__EAGER(Random["random"])(__EAGER(__INT(0)), __EAGER(__INT(100))))["_OP___GT__GT__EQ_"])(function(n)
-  return __EAGER(__EAGER(__EAGER(__EAGER(Random["random"])(__EAGER(__INT(0)), __EAGER(__INT(100))))["_OP___GT__GT__EQ_"])(function(m)
-    return __EAGER(__EAGER(println)(__EAGER(__EAGER(__EAGER(n)["_OP___PLUS_"])(m))))
-  end))
-end)))
+local myList
+myList = __LAZY(function()
+  return Cons(__INT(0), Cons(__INT(1), Cons(__INT(2), Cons(__INT(3), Cons(__INT(4), Cons(__INT(5), Cons(__INT(6), Cons(__INT(7), Cons(__INT(8), Cons(__INT(9), Nil))))))))))
+end)
+local myFilter
+myFilter = __LAZY(function()
+  return __LAZY(function()
+    return function(_ANON_0)
+      return __EAGER(__EAGER(_ANON_0)["_OP___GT_"])(__INT(5))
+    end
+  end)
+end)
+__EVAL(__EAGER(__EAGER(println)(__EAGER(__EAGER(__EAGER(__EAGER(__EAGER(myList))["filter"])(__EAGER(myFilter)))))))

@@ -1,3 +1,5 @@
+local __RANDOM_SEED = 696969696
+
 local function __LAZY(obj)
   if type(obj) == "table" and obj["~lazy"] then
     return obj
@@ -358,7 +360,8 @@ local List = {
 local Random = {
   random = function(min, max)
     return IO(function()
-      math.randomseed(os.time())
+      __RANDOM_SEED = __RANDOM_SEED + 1 + os.time()
+      math.randomseed(__RANDOM_SEED)
       return __INT(math.random(min["~"], max["~"]))
     end)
   end,

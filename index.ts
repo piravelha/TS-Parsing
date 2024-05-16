@@ -88,13 +88,13 @@ function freeMethodAccessMapping(expr, name, arg) {
     const var1 = `_ANON_${idCount++}`
     if (arg === "_") {
       const var2 = `_ANON_${idCount++}`
-      return `__LAZY(function()\nreturn function(${var1})\nreturn __LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${var1}["${name}"])(${var2})\nend\nend)\nend\nend)`
+      return `__LAZY(function()\nreturn function(${var1})\nreturn __LAZY(function()\nreturn function(${var2})\nreturn __EAGER(__EAGER(${var1})["${name}"])(${var2})\nend\nend)\nend\nend)`
     }
-    return `__LAZY(function()\nreturn function(${var1})\nreturn __EAGER(${var1}["${name}"])(${arg})\nend\nend)` 
+    return `__LAZY(function()\nreturn function(${var1})\nreturn __EAGER(__EAGER(${var1})["${name}"])(${arg})\nend\nend)` 
   }
   if (arg === "_") {
     const var2 = `_ANON_${idCount++}`
-    return `__LAZY(function()\nreturn function(${var2})\nreturn __EAGER(${expr}["${name}"])(${var2})\nend\nend)`
+    return `__LAZY(function()\nreturn function(${var2})\nreturn __EAGER(__EAGER(${expr})["${name}"])(${var2})\nend\nend)`
   }
   return `__EAGER(__EAGER(${expr})["${name}"])(${arg})`
 }
@@ -339,6 +339,10 @@ const methodCall: Parser<string> = seq(
         let argVar = `_ANON_${idCount++}`
         code = `function(${argVar})\nreturn ${code.replace(`%ARG_${i}`, `__EAGER(${argVar}${arg.replace("_", "")}`)})\nend`
       } else {
+        if (/\["/.test(arg)) {
+          let [expr,name] = arg.split("[\"", 2)
+          arg = `__EAGER(${expr})["${name}`
+        }
         code = code.replace(`%ARG_${i}`, `__EAGER(${arg})`)
       }
     }
@@ -476,7 +480,7 @@ const doNotation: Parser<string> = seq(
   let last = bindings.pop()
 
   for (const [name, expr] of bindings as any) {
-    code += `__EAGER(__EAGER(${expr}["_OP___GT__GT__EQ_"])(function(${name})\nreturn `
+    code += `__EAGER(__EAGER(__EAGER(${expr})["_OP___GT__GT__EQ_"])(function(${name})\nreturn `
   }
 
   code += `${last[1]}${"\nend))".repeat(bindings.length)}`

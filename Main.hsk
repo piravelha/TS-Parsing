@@ -1,6 +1,7 @@
 
-<| do
-  yield n = Random.random(0, 100)
-  yield m = Random.random(0, 100)
-  <| println(n + m)
-end
+def myList = [0,1,2,3,4,5,6,7,8,9]
+def myFilter = _ > 5
+
+# [6,7,8,8]
+<| println(myList.filter(myFilter))
+

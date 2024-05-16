@@ -79,13 +79,13 @@ function freeMethodAccessMapping(expr, name, arg) {
         var var1 = "_ANON_".concat(idCount++);
         if (arg === "_") {
             var var2 = "_ANON_".concat(idCount++);
-            return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __LAZY(function()\nreturn function(").concat(var2, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)\nend\nend)");
+            return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __LAZY(function()\nreturn function(").concat(var2, ")\nreturn __EAGER(__EAGER(").concat(var1, ")[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)\nend\nend)");
         }
-        return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __EAGER(").concat(var1, "[\"").concat(name, "\"])(").concat(arg, ")\nend\nend)");
+        return "__LAZY(function()\nreturn function(".concat(var1, ")\nreturn __EAGER(__EAGER(").concat(var1, ")[\"").concat(name, "\"])(").concat(arg, ")\nend\nend)");
     }
     if (arg === "_") {
         var var2 = "_ANON_".concat(idCount++);
-        return "__LAZY(function()\nreturn function(".concat(var2, ")\nreturn __EAGER(").concat(expr, "[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)");
+        return "__LAZY(function()\nreturn function(".concat(var2, ")\nreturn __EAGER(__EAGER(").concat(expr, ")[\"").concat(name, "\"])(").concat(var2, ")\nend\nend)");
     }
     return "__EAGER(__EAGER(".concat(expr, ")[\"").concat(name, "\"])(").concat(arg, ")");
 }
@@ -240,6 +240,10 @@ var methodCall = (0, parsing_1.seq)((0, parsing_1.alt)(rawPropertyAccess, (0, pa
                 code = "function(".concat(argVar, ")\nreturn ").concat(code.replace("%ARG_".concat(i), "__EAGER(".concat(argVar).concat(arg.replace("_", ""))), ")\nend");
             }
             else {
+                if (/\["/.test(arg)) {
+                    var _b = arg.split("[\"", 2), expr = _b[0], name_1 = _b[1];
+                    arg = "__EAGER(".concat(expr, ")[\"").concat(name_1);
+                }
                 code = code.replace("%ARG_".concat(i), "__EAGER(".concat(arg, ")"));
             }
         }
@@ -255,8 +259,8 @@ var freeMethodAccess = (0, parsing_1.seq)((0, parsing_1.alt)(primaryExpression, 
     var expr = _a[0], argLists = _a[1];
     var code = expr;
     for (var _i = 0, argLists_2 = argLists; _i < argLists_2.length; _i++) {
-        var _b = argLists_2[_i], name_1 = _b[0], arg = _b[1];
-        code = freeMethodAccessMapping(code, name_1, arg);
+        var _b = argLists_2[_i], name_2 = _b[0], arg = _b[1];
+        code = freeMethodAccessMapping(code, name_2, arg);
     }
     return code;
 });
@@ -309,8 +313,8 @@ var doNotation = (0, parsing_1.seq)((0, parsing_1.string)("do"), (0, parsing_1.a
     var code = "";
     var last = bindings.pop();
     for (var _i = 0, _b = bindings; _i < _b.length; _i++) {
-        var _c = _b[_i], name_2 = _c[0], expr = _c[1];
-        code += "__EAGER(__EAGER(".concat(expr, "[\"_OP___GT__GT__EQ_\"])(function(").concat(name_2, ")\nreturn ");
+        var _c = _b[_i], name_3 = _c[0], expr = _c[1];
+        code += "__EAGER(__EAGER(__EAGER(".concat(expr, ")[\"_OP___GT__GT__EQ_\"])(function(").concat(name_3, ")\nreturn ");
     }
     code += "".concat(last[1]).concat("\nend))".repeat(bindings.length));
     return code;
